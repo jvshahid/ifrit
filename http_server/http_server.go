@@ -27,31 +27,37 @@ type httpServer struct {
 	stoppingChan          chan struct{}
 
 	tlsConfig *tls.Config
+	listener  net.Listener
 }
 
-func newServerWithListener(protocol, address string, handler http.Handler, tlsConfig *tls.Config) ifrit.Runner {
+func newServerWithListener(protocol, address string, handler http.Handler, tlsConfig *tls.Config, listener net.Listener) ifrit.Runner {
 	return &httpServer{
 		address:   address,
 		handler:   handler,
 		tlsConfig: tlsConfig,
 		protocol:  protocol,
+		listener:  listener,
 	}
 }
 
 func NewUnixServer(address string, handler http.Handler) ifrit.Runner {
-	return newServerWithListener(UNIX, address, handler, nil)
+	return newServerWithListener(UNIX, address, handler, nil, nil)
 }
 
 func New(address string, handler http.Handler) ifrit.Runner {
-	return newServerWithListener(TCP, address, handler, nil)
+	return newServerWithListener(TCP, address, handler, nil, nil)
 }
 
 func NewUnixTLSServer(address string, handler http.Handler, tlsConfig *tls.Config) ifrit.Runner {
-	return newServerWithListener(UNIX, address, handler, tlsConfig)
+	return newServerWithListener(UNIX, address, handler, tlsConfig, nil)
 }
 
 func NewTLSServer(address string, handler http.Handler, tlsConfig *tls.Config) ifrit.Runner {
-	return newServerWithListener(TCP, address, handler, tlsConfig)
+	return newServerWithListener(TCP, address, handler, tlsConfig, nil)
+}
+
+func NewServerFromListener(handler http.Handler, listener net.Listener) ifrit.Runner {
+	return newServerWithListener("", "", handler, nil, listener)
 }
 
 func (s *httpServer) Run(signals <-chan os.Signal, ready chan<- struct{}) error {
@@ -117,6 +123,10 @@ func (s *httpServer) Run(signals <-chan os.Signal, ready chan<- struct{}) error 
 }
 
 func (s *httpServer) getListener(tlsConfig *tls.Config) (net.Listener, error) {
+	if s.listener != nil {
+		return s.listener, nil
+	}
+
 	listener, err := net.Listen(s.protocol, s.address)
 	if err != nil {
 		return nil, err
